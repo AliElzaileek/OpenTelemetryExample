@@ -8,7 +8,7 @@ var host = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration((hostingContext, config) =>
     {
         var currentDir = Directory.GetCurrentDirectory();
-        var solutionDir = Directory.GetParent(currentDir)?.Parent?.Parent;
+        var solutionDir = Directory.GetParent(currentDir)?.Parent?.Parent?.Parent;
         if (solutionDir == null)
         {
             throw new DirectoryNotFoundException("Could not find solution directory");

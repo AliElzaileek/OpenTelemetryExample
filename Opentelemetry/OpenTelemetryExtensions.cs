@@ -82,7 +82,7 @@ namespace CFX.Opentelemetry
                                                        serviceVersion: version,
                                                        serviceInstanceId: Environment.MachineName);
                         })
-                            .AddConsoleExporter()
+                            //.AddConsoleExporter()
                             .AddHttpClientInstrumentation()
                             .AddAspNetCoreInstrumentation()
                             .AddOtlpExporter(opt =>
