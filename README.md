@@ -17,6 +17,7 @@ This guide walks you through logging into New Relic, extracting configurations, 
 
 ### 2. Clone the Repository
 set globalSettings.json to:
+
 "OpenTelemetry": {
   "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otlp.eu01.nr-data.net:4317",
   "OTEL_EXPORTER_OTLP_HEADERS": "api-key=(Paste your License key here)",
