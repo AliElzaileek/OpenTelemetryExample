@@ -19,7 +19,7 @@ namespace CFX.Opentelemetry
             if (logBuilder == null) throw new ArgumentNullException(nameof(logBuilder));
             if (configuration == null) throw new ArgumentNullException(nameof(configuration));
             logBuilder.ClearProviders();
-            var otelSettings = GetOpenTelemetrySettings(configuration);
+            OpenTelemetrySettings otelSettings = GetOpenTelemetrySettings(configuration);
 
             logBuilder.AddOpenTelemetry(logging =>
             {
@@ -27,7 +27,7 @@ namespace CFX.Opentelemetry
                 logging.IncludeScopes = true;
                 logging.ParseStateValues = true;
 
-                var resourceBuilder = CreateResourceBuilder(otelSettings);
+                ResourceBuilder resourceBuilder = CreateResourceBuilder(otelSettings);
                 logging.SetResourceBuilder(resourceBuilder);
 
                 //logging.AddConsoleExporter();
@@ -59,7 +59,7 @@ namespace CFX.Opentelemetry
         public static IServiceCollection AddApplicationTelemetry(this IServiceCollection services, IConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(configuration, nameof(configuration));
-            var options = GetOpenTelemetrySettings(configuration);
+            OpenTelemetrySettings options = GetOpenTelemetrySettings(configuration);
             string? applicationName = options.OTEL_SERVICE_NAME;
             string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
             string? applicationNamespace = GetApplicationNamespace(applicationName!);
@@ -95,7 +95,7 @@ namespace CFX.Opentelemetry
 
                     .WithMetrics(builder =>
                     {
-                        var resourceBuilder = CreateResourceBuilder(options);
+                        ResourceBuilder resourceBuilder = CreateResourceBuilder(options);
                         builder.SetResourceBuilder(resourceBuilder);
                         builder.ConfigureResource((resourceBuilder) =>
                         {
@@ -145,10 +145,9 @@ namespace CFX.Opentelemetry
             return services;
         }
 
-
         private static OpenTelemetrySettings GetOpenTelemetrySettings(IConfiguration configuration)
         {
-            var otelSettings = configuration.GetSection("OpenTelemetry").Get<OpenTelemetrySettings>()
+            OpenTelemetrySettings otelSettings = configuration.GetSection("OpenTelemetry").Get<OpenTelemetrySettings>()
                 ?? throw new InvalidOperationException("OpenTelemetry configuration is missing");
 
             if (string.IsNullOrEmpty(otelSettings.OTEL_SERVICE_NAME))
@@ -162,12 +161,12 @@ namespace CFX.Opentelemetry
 
         private static ResourceBuilder CreateResourceBuilder(OpenTelemetrySettings otelSettings)
         {
-            var resourceBuilder = ResourceBuilder.CreateDefault()
+            ResourceBuilder resourceBuilder = ResourceBuilder.CreateDefault()
                 .AddService(serviceName: otelSettings.OTEL_SERVICE_NAME!);
 
             if (!string.IsNullOrWhiteSpace(otelSettings.OTEL_RESOURCE_ATTRIBUTES))
             {
-                var attributes = otelSettings.OTEL_RESOURCE_ATTRIBUTES!
+                Dictionary<string, object> attributes = otelSettings.OTEL_RESOURCE_ATTRIBUTES!
                     .Split(',', StringSplitOptions.RemoveEmptyEntries)
                     .Select(part => part.Split('=', 2))
                     .Where(parts => parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]))
