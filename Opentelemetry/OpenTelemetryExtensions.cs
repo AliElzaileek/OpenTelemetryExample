@@ -60,8 +60,9 @@ namespace CFX.Opentelemetry
         {
             ArgumentNullException.ThrowIfNull(configuration, nameof(configuration));
             OpenTelemetrySettings options = GetOpenTelemetrySettings(configuration);
-            string? applicationName = options.OTEL_SERVICE_NAME;
-            string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
+            string? applicationName = Assembly.GetEntryAssembly()?.GetName().Name?.ToString() ?? options.OTEL_SERVICE_NAME;
+            //string? applicationName = options.OTEL_SERVICE_NAME;
+            string version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
             string? applicationNamespace = GetApplicationNamespace(applicationName!);
 
             services.AddOpenTelemetry()
