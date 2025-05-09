@@ -7,6 +7,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using System.Diagnostics.Metrics;
 using System.Reflection;
+using Npgsql;
 
 
 
@@ -86,6 +87,7 @@ namespace CFX.Opentelemetry
                             //.AddConsoleExporter()
                             .AddHttpClientInstrumentation()
                             .AddAspNetCoreInstrumentation()
+
                             .AddOtlpExporter(opt =>
                             {
                                 opt.Endpoint = new Uri(options.OTEL_EXPORTER_OTLP_ENDPOINT!);
@@ -110,6 +112,7 @@ namespace CFX.Opentelemetry
                                .AddRuntimeInstrumentation()
                                .AddAspNetCoreInstrumentation()
                                .AddHttpClientInstrumentation()
+                               .AddNpgsqlInstrumentation()
                                 //.AddProcessInstrumentation()
                                 //.AddSqlClientInstrumentation()
                                 .AddOtlpExporter(opt =>
