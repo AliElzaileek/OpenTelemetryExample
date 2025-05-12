@@ -8,6 +8,8 @@ using OpenTelemetry.Trace;
 using System.Diagnostics.Metrics;
 using System.Reflection;
 using Npgsql;
+using Microsoft.Extensions.Options;
+using System.Diagnostics;
 
 
 
@@ -65,7 +67,8 @@ namespace CFX.Opentelemetry
             //string? applicationName = options.OTEL_SERVICE_NAME;
             string version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
             string? applicationNamespace = GetApplicationNamespace(applicationName!);
-
+            Sampler selectedSampler = GetSampler(configuration);
+            
             services.AddOpenTelemetry()
                     .ConfigureResource(resourceBuilder =>
                     {
@@ -85,9 +88,10 @@ namespace CFX.Opentelemetry
                                                        serviceInstanceId: Environment.MachineName);
                         })
                             //.AddConsoleExporter()
-                            .AddHttpClientInstrumentation()
+                        .SetSampler(selectedSampler)    
+                        .AddHttpClientInstrumentation()
                             .AddAspNetCoreInstrumentation()
-
+                            .AddNpgsql()
                             .AddOtlpExporter(opt =>
                             {
                                 opt.Endpoint = new Uri(options.OTEL_EXPORTER_OTLP_ENDPOINT!);
@@ -112,7 +116,6 @@ namespace CFX.Opentelemetry
                                .AddRuntimeInstrumentation()
                                .AddAspNetCoreInstrumentation()
                                .AddHttpClientInstrumentation()
-                               .AddNpgsqlInstrumentation()
                                 //.AddProcessInstrumentation()
                                 //.AddSqlClientInstrumentation()
                                 .AddOtlpExporter(opt =>
@@ -161,6 +164,21 @@ namespace CFX.Opentelemetry
                 throw new InvalidOperationException("OpenTelemetry OTLP Endpoint is not configured");
 
             return otelSettings;
+        }
+
+        private static Sampler GetSampler(IConfiguration configuration)
+        {
+            OpenTelemetrySettings? otelSettings = configuration.GetSection("OpenTelemetry").Get<OpenTelemetrySettings>()
+                ?? throw new InvalidOperationException("OpenTelemetry sampler configuration is missing");
+            
+            Sampler sampler = otelSettings.OTEL_SAMPLER?.OTEL_SAMPLER_NAME switch
+            {
+                "AlwaysOn" => new AlwaysOnSampler(),
+                "AlwaysOff" => new AlwaysOffSampler(),
+                "TraceIdRatioBased" => new TraceIdRatioBasedSampler(otelSettings.OTEL_SAMPLER?.OTEL_SAMPLER_RATIO ?? 1.0),
+                _ => new AlwaysOnSampler()
+            };
+            return sampler;
         }
 
         private static ResourceBuilder CreateResourceBuilder(OpenTelemetrySettings otelSettings)
