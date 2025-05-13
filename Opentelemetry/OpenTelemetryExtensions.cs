@@ -56,7 +56,7 @@ namespace CFX.Opentelemetry
             {
                 return applicationName;
             }
-            return string.Join(".", chunks.AsEnumerable().Skip(1).SkipLast(1));
+            return string.Join(".", chunks.AsEnumerable().Skip(1));
         }
 
         public static IServiceCollection AddApplicationTelemetry(this IServiceCollection services, IConfiguration configuration)
