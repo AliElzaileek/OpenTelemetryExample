@@ -1,7 +1,7 @@
 {
   "OpenTelemetry": {
     "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otlp.eu01.nr-data.net:4317",
-    "OTEL_EXPORTER_OTLP_HEADERS": "api-key=eu01xx9b48cd88545224ea768e8842d2FFFFNRAL",
+    "OTEL_EXPORTER_OTLP_HEADERS": "api-key=",
     "OTEL_SERVICE_NAME": "ServiceName",
     "OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT": 4095,
     "OTEL_EXPORTER_OTLP_COMPRESSION": "gzip",
