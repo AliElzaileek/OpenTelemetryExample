@@ -16,5 +16,12 @@ namespace CFX.Opentelemetry
         public string? OTEL_EXPORTER_OTLP_COMPRESSION { get; set; }
         public string? OTEL_EXPORTER_OTLP_PROTOCOL { get; set; }
         public string? OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE { get; set; }
+        public SamplerOptions? OTEL_SAMPLER { get; set; }
+    }
+
+    internal class SamplerOptions
+    {
+        public string? OTEL_SAMPLER_NAME { get; set; }
+        public double? OTEL_SAMPLER_RATIO { get; set; }
     }
 }
