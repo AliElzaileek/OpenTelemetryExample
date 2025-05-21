@@ -17,11 +17,13 @@ namespace CFX.OpenTelemetry
     {
         public static string OpenTelemetrySettingsKey => "OpenTelemetry";
 
-        public static ILoggingBuilder LoggingConfiguration(this ILoggingBuilder logBuilder, IConfiguration configuration)
+        public static ILoggingBuilder ConfigureOpenTelemetryLogging(this ILoggingBuilder logBuilder, IConfiguration configuration)
         {
-            if (logBuilder == null) throw new ArgumentNullException(nameof(logBuilder));
-            if (configuration == null) throw new ArgumentNullException(nameof(configuration));
+            ArgumentNullException.ThrowIfNull(logBuilder);
+            ArgumentNullException.ThrowIfNull(configuration);
+
             logBuilder.ClearProviders();
+
             OpenTelemetrySettings otelSettings = GetOpenTelemetrySettings(configuration);
 
             logBuilder.AddOpenTelemetry(logging =>
@@ -59,13 +61,15 @@ namespace CFX.OpenTelemetry
             return string.Join(".", chunks.AsEnumerable().Skip(1));
         }
 
-        public static IServiceCollection AddApplicationTelemetry(this IServiceCollection services, IConfiguration configuration)
+        public static IServiceCollection AddApplicationOpenTelemetry(this IServiceCollection services, IConfiguration configuration, Action<MeterProviderBuilder>? configureMeterProviderAction = null)
         {
             ArgumentNullException.ThrowIfNull(configuration, nameof(configuration));
             OpenTelemetrySettings options = GetOpenTelemetrySettings(configuration);
-            string? applicationName = Assembly.GetEntryAssembly()?.GetName().Name?.ToString() ?? options.OtelServiceName;
-            //string? applicationName = options.OtelServiceName;
-            string version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
+
+            AssemblyName? assemblyName = Assembly.GetEntryAssembly()?.GetName();
+
+            string? applicationName = assemblyName?.Name ?? options.OtelServiceName;
+            string version = assemblyName?.Version?.ToString() ?? "unknown";
             string? applicationNamespace = GetApplicationNamespace(applicationName!);
             Sampler selectedSampler = GetSampler(configuration);
 
@@ -79,59 +83,57 @@ namespace CFX.OpenTelemetry
                                                    serviceVersion: version,
                                                    serviceInstanceId: Environment.MachineName);
                     })
-
                     .WithTracing(builder =>
                     {
                         builder.ConfigureResource((resourceBuilder) =>
                         {
                             resourceBuilder.AddService(serviceName: applicationName!,
-                                                       serviceNamespace: applicationNamespace,
-                                                       serviceVersion: version,
-                                                       serviceInstanceId: Environment.MachineName);
+                                                        serviceNamespace: applicationNamespace,
+                                                        serviceVersion: version,
+                                                        serviceInstanceId: Environment.MachineName);
                         })
-                        //.AddConsoleExporter()
                         .SetSampler(selectedSampler)
                         .AddHttpClientInstrumentation()
-                            .AddAspNetCoreInstrumentation()
-                            .AddNpgsql()
-                            .AddOtlpExporter(opt =>
-                            {
-                                opt.Endpoint = new Uri(options.OtelExporterOtlpEndpoint!);
-                                opt.Headers = options.OtelExporterOtlpHeaders;
-                                opt.Protocol = OtlpExportProtocol.Grpc;
-                            });
+                        .AddAspNetCoreInstrumentation()
+                        .AddNpgsql()
+                        .AddOtlpExporter(opt =>
+                        {
+                            opt.Endpoint = new Uri(options.OtelExporterOtlpEndpoint!);
+                            opt.Headers = options.OtelExporterOtlpHeaders;
+                            opt.Protocol = OtlpExportProtocol.Grpc;
+                        });
                     })
-
                     .WithMetrics(builder =>
                     {
                         ResourceBuilder resourceBuilder = CreateResourceBuilder(options);
                         builder.SetResourceBuilder(resourceBuilder);
-                        builder.ConfigureResource((resourceBuilder) =>
-                        {
-                            resourceBuilder.AddService(serviceName: applicationName!,
-                                                       serviceNamespace: applicationNamespace,
-                                                       serviceVersion: version,
-                                                       serviceInstanceId: Environment.MachineName);
-                        })
 
-                               //.AddConsoleExporter()
-                               .AddRuntimeInstrumentation()
+                        builder.ConfigureResource((resourceBuilder) =>
+                                                  {
+                                                      resourceBuilder.AddService(serviceName: applicationName!,
+                                                                                 serviceNamespace: applicationNamespace,
+                                                                                 serviceVersion: version,
+                                                                                 serviceInstanceId: Environment.MachineName);
+                                                  });
+
+                        builder.AddRuntimeInstrumentation()
                                .AddAspNetCoreInstrumentation()
                                .AddHttpClientInstrumentation()
-                                //.AddProcessInstrumentation()
-                                //.AddSqlClientInstrumentation()
-                                .AddOtlpExporter(opt =>
-                                {
-                                    opt.Endpoint = new Uri(options.OtelExporterOtlpEndpoint!);
-                                    opt.Headers = options.OtelExporterOtlpHeaders;
-                                    opt.Protocol = OtlpExportProtocol.Grpc;
-                                })
-                               .AddView(instrument =>
-                               {
-                                   return instrument.GetType().GetGenericTypeDefinition() == typeof(Histogram<>)
-                                       ? new Base2ExponentialBucketHistogramConfiguration()
-                                       : null;
-                               });
+                               .AddNpgsqlInstrumentation();
+
+                        configureMeterProviderAction?.Invoke(builder);
+
+                        builder.AddOtlpExporter(opt =>
+                                                {
+                                                    opt.Endpoint = new Uri(options.OtelExporterOtlpEndpoint!);
+                                                    opt.Headers = options.OtelExporterOtlpHeaders;
+                                                    opt.Protocol = OtlpExportProtocol.Grpc;
+                                                });
+
+                        builder.AddView(instrument =>
+                                        {
+                                            return instrument.GetType().GetGenericTypeDefinition() == typeof(Histogram<>) ? new Base2ExponentialBucketHistogramConfiguration() : null;
+                                        });
                     })
                     .WithLogging(logging =>
                     {
@@ -142,7 +144,6 @@ namespace CFX.OpenTelemetry
                                                        serviceVersion: version,
                                                        serviceInstanceId: Environment.MachineName);
                         })
-                        .AddConsoleExporter()
                         .AddOtlpExporter(opt =>
                         {
                             opt.Endpoint = new Uri(options.OtelExporterOtlpEndpoint!);
@@ -150,7 +151,7 @@ namespace CFX.OpenTelemetry
                             opt.Protocol = OtlpExportProtocol.Grpc;
                         });
                     });
-            //services.AddSingleton(typeof(OpenTelemetryExtensions));
+
             return services;
         }
 
@@ -170,8 +171,7 @@ namespace CFX.OpenTelemetry
 
         private static Sampler GetSampler(IConfiguration configuration)
         {
-            OpenTelemetrySettings? otelSettings = configuration.GetSection(OpenTelemetrySettingsKey).Get<OpenTelemetrySettings>()
-                ?? throw new InvalidOperationException("OpenTelemetry sampler configuration is missing");
+            OpenTelemetrySettings? otelSettings = configuration.GetSection(OpenTelemetrySettingsKey).Get<OpenTelemetrySettings>() ?? throw new InvalidOperationException("OpenTelemetry sampler configuration is missing");
 
             Sampler sampler = otelSettings.OtelSampler?.OtelSamplerName switch
             {

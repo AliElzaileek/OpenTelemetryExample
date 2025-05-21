@@ -27,9 +27,9 @@ IHost host = Host.CreateDefaultBuilder(args)
     })
     .ConfigureServices((context, services) =>
     {
-        // Now context.Configuration is properly configured
-        services.AddApplicationTelemetry(context.Configuration);
-        
+        // TODO add logging support
+        // Now context.Configuration is properly configured        
+        services.AddOpenTelemetry();
         // If you want to add a hosted service that logs periodically:
         services.AddHostedService<LoggingService>();
     })
