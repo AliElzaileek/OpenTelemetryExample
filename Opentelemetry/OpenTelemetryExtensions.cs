@@ -15,6 +15,10 @@ namespace CFX.OpenTelemetry
 {
     public static class OpenTelemetryExtensions
     {
+        private const string SAMPLER_ALWAYS_ON = "AlwaysOn";
+        private const string SAMPLER_ALWAYS_OFF = "AlwaysOff";
+        private const string SAMPLER_TRACE_ID_RATIO_BASED = "TraceIdRatioBased";
+
         public static string OpenTelemetrySettingsKey => "OpenTelemetry";
 
         public static ILoggingBuilder ConfigureOpenTelemetryLogging(this ILoggingBuilder logBuilder, IConfiguration configuration)
@@ -66,12 +70,15 @@ namespace CFX.OpenTelemetry
             ArgumentNullException.ThrowIfNull(configuration, nameof(configuration));
             OpenTelemetrySettings options = GetOpenTelemetrySettings(configuration);
 
+            bool instrumentHttpClient = options.Instrumentation.HttpClientEnabled;
+            bool instrumentAspNetCore = options.Instrumentation.AspNetCoreEnabled;
+
             AssemblyName? assemblyName = Assembly.GetEntryAssembly()?.GetName();
 
-            string? applicationName = assemblyName?.Name ?? options.OtelServiceName;
+            string applicationName = options.OtelServiceName ?? throw new ArgumentNullException(nameof(options.OtelServiceName));
             string version = assemblyName?.Version?.ToString() ?? "unknown";
-            string? applicationNamespace = GetApplicationNamespace(applicationName!);
-            Sampler selectedSampler = GetSampler(configuration);
+            string applicationNamespace = GetApplicationNamespace(applicationName);
+            Sampler? selectedSampler = GetSampler(configuration);
 
             services.Configure<OpenTelemetrySettings>(configuration.GetSection(OpenTelemetrySettingsKey));
 
@@ -85,23 +92,32 @@ namespace CFX.OpenTelemetry
                     })
                     .WithTracing(builder =>
                     {
-                        builder.ConfigureResource((resourceBuilder) =>
+                        builder = builder.ConfigureResource((resourceBuilder) =>
+                                                            {
+                                                                resourceBuilder.AddService(serviceName: applicationName!,
+                                                                                            serviceNamespace: applicationNamespace,
+                                                                                            serviceVersion: version,
+                                                                                            serviceInstanceId: Environment.MachineName);
+                                                            });
+                        if (selectedSampler != null)
                         {
-                            resourceBuilder.AddService(serviceName: applicationName!,
-                                                        serviceNamespace: applicationNamespace,
-                                                        serviceVersion: version,
-                                                        serviceInstanceId: Environment.MachineName);
-                        })
-                        .SetSampler(selectedSampler)
-                        .AddHttpClientInstrumentation()
-                        .AddAspNetCoreInstrumentation()
-                        .AddNpgsql()
-                        .AddOtlpExporter(opt =>
+                            builder.SetSampler(selectedSampler);
+                        }
+                        if (instrumentAspNetCore)
                         {
-                            opt.Endpoint = new Uri(options.OtelExporterOtlpEndpoint!);
-                            opt.Headers = options.OtelExporterOtlpHeaders;
-                            opt.Protocol = OtlpExportProtocol.Grpc;
-                        });
+                            builder.AddAspNetCoreInstrumentation();
+                        }
+                        if (instrumentHttpClient)
+                        {
+                            builder.AddHttpClientInstrumentation();
+                        }
+                        builder.AddNpgsql()
+                               .AddOtlpExporter(opt =>
+                               {
+                                   opt.Endpoint = new Uri(options.OtelExporterOtlpEndpoint!);
+                                   opt.Headers = options.OtelExporterOtlpHeaders;
+                                   opt.Protocol = OtlpExportProtocol.Grpc;
+                               });
                     })
                     .WithMetrics(builder =>
                     {
@@ -117,9 +133,16 @@ namespace CFX.OpenTelemetry
                                                   });
 
                         builder.AddRuntimeInstrumentation()
-                               .AddAspNetCoreInstrumentation()
-                               .AddHttpClientInstrumentation()
                                .AddNpgsqlInstrumentation();
+
+                        if (instrumentAspNetCore)
+                        {
+                            builder.AddAspNetCoreInstrumentation();
+                        }
+                        if (instrumentHttpClient)
+                        {
+                            builder.AddHttpClientInstrumentation();
+                        }
 
                         configureMeterProviderAction?.Invoke(builder);
 
@@ -157,29 +180,40 @@ namespace CFX.OpenTelemetry
 
         private static OpenTelemetrySettings GetOpenTelemetrySettings(IConfiguration configuration)
         {
-            OpenTelemetrySettings otelSettings = configuration.GetSection(OpenTelemetrySettingsKey).Get<OpenTelemetrySettings>()
-                ?? throw new InvalidOperationException("OpenTelemetry configuration is missing");
+            OpenTelemetrySettings otelSettings = configuration.GetSection(OpenTelemetrySettingsKey).Get<OpenTelemetrySettings>() ?? throw new InvalidOperationException("OpenTelemetry configuration is missing");
 
             if (string.IsNullOrEmpty(otelSettings.OtelServiceName))
+            {
                 throw new InvalidOperationException("OpenTelemetry service name is not configured");
+            }
 
             if (string.IsNullOrEmpty(otelSettings.OtelExporterOtlpEndpoint))
+            {
                 throw new InvalidOperationException("OpenTelemetry OTLP Endpoint is not configured");
+            }
 
             return otelSettings;
         }
 
-        private static Sampler GetSampler(IConfiguration configuration)
+        private static Sampler? GetSampler(IConfiguration configuration)
         {
-            OpenTelemetrySettings? otelSettings = configuration.GetSection(OpenTelemetrySettingsKey).Get<OpenTelemetrySettings>() ?? throw new InvalidOperationException("OpenTelemetry sampler configuration is missing");
+            OpenTelemetrySettings? otelSettings = configuration.GetSection(OpenTelemetrySettingsKey).Get<OpenTelemetrySettings>();
 
-            Sampler sampler = otelSettings.OtelSampler?.OtelSamplerName switch
+            if (otelSettings == null ||
+                otelSettings.OtelSampler == null)
             {
-                "AlwaysOn" => new AlwaysOnSampler(),
-                "AlwaysOff" => new AlwaysOffSampler(),
-                "TraceIdRatioBased" => new TraceIdRatioBasedSampler(otelSettings.OtelSampler?.OtelSamplerRatio ?? 1.0),
-                _ => new AlwaysOnSampler()
+                return null;
+            }
+
+            string? samplerName = otelSettings.OtelSampler?.OtelSamplerName;
+            Sampler? sampler = samplerName switch
+            {
+                SAMPLER_ALWAYS_ON => new AlwaysOnSampler(),
+                SAMPLER_ALWAYS_OFF => new AlwaysOffSampler(),
+                SAMPLER_TRACE_ID_RATIO_BASED => new TraceIdRatioBasedSampler(otelSettings.OtelSampler?.OtelSamplerRatio ?? 1.0),
+                _ => string.IsNullOrEmpty(samplerName) ? new AlwaysOnSampler() : throw new InvalidOperationException($"Sampler {samplerName} is unknown or unsupported.")
             };
+
             return sampler;
         }
 

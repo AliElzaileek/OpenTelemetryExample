@@ -1,9 +1,9 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using CFX.Logging;
+using CFX.OpenTelemetry;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using CFX.OpenTelemetry;
-using CFX.Logging;
 
 IHost host = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration((hostingContext, config) =>
@@ -17,10 +17,10 @@ IHost host = Host.CreateDefaultBuilder(args)
         ArgumentException.ThrowIfNullOrEmpty(globalPath, nameof(globalPath));
 
         config.AddJsonFile(globalPath, optional: false, reloadOnChange: true);
-        
+
         config.AddEnvironmentVariables();
         config.AddCommandLine(args);
-        if(hostingContext.HostingEnvironment.IsDevelopment())
+        if (hostingContext.HostingEnvironment.IsDevelopment())
         {
             config.AddUserSecrets<Program>(optional: true);
         }
@@ -29,7 +29,7 @@ IHost host = Host.CreateDefaultBuilder(args)
     {
         // TODO add logging support
         // Now context.Configuration is properly configured        
-        services.AddOpenTelemetry();
+        services.AddApplicationOpenTelemetry(context.Configuration, null);
         // If you want to add a hosted service that logs periodically:
         services.AddHostedService<LoggingService>();
     })

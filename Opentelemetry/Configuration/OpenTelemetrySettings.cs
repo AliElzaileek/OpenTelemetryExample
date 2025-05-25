@@ -31,6 +31,9 @@ namespace CFX.OpenTelemetry.Configuration
 
         [ConfigurationKeyName("OTEL_SAMPLER")]
         public SamplerOptions? OtelSampler { get; set; }
+
+        [ConfigurationKeyName("OTEL_INSTRUMENTATION")]
+        public InstrumentationOptions Instrumentation { get; set; } = new();
     }
 
     public class SamplerOptions
@@ -41,4 +44,11 @@ namespace CFX.OpenTelemetry.Configuration
         [ConfigurationKeyName("OTEL_SAMPLER_RATIO")]
         public double? OtelSamplerRatio { get; set; }
     }
+
+    public class InstrumentationOptions
+    {
+        public bool AspNetCoreEnabled { get; set; }
+        public bool HttpClientEnabled { get; set; }
+    }
+
 }
