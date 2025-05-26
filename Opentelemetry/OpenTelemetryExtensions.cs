@@ -112,6 +112,7 @@ namespace CFX.OpenTelemetry
                             builder.AddHttpClientInstrumentation();
                         }
                         builder.AddNpgsql()
+                               .AddEntityFrameworkCoreInstrumentation()
                                .AddOtlpExporter(opt =>
                                {
                                    opt.Endpoint = new Uri(options.OtelExporterOtlpEndpoint!);
@@ -123,7 +124,6 @@ namespace CFX.OpenTelemetry
                     {
                         ResourceBuilder resourceBuilder = CreateResourceBuilder(options);
                         builder.SetResourceBuilder(resourceBuilder);
-
                         builder.ConfigureResource((resourceBuilder) =>
                                                   {
                                                       resourceBuilder.AddService(serviceName: applicationName!,
@@ -144,7 +144,10 @@ namespace CFX.OpenTelemetry
                             builder.AddHttpClientInstrumentation();
                         }
 
-                        configureMeterProviderAction?.Invoke(builder);
+                        if (configureMeterProviderAction != null)
+                        {
+                            configureMeterProviderAction.Invoke(builder);
+                        }
 
                         builder.AddOtlpExporter(opt =>
                                                 {
